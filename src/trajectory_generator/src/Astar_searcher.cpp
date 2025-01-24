@@ -185,18 +185,47 @@ inline void Astarpath::AstarGetSucc(MappingNodePtr currentPtr,
   }
 }
 
+// double Astarpath::getHeu(MappingNodePtr node1, MappingNodePtr node2) {
+//   // 使用数字距离和一种类型的tie_breaker
+
+//   double heu;
+//   double tie_breaker;
+
+
+  
+//   return heu;
+
+  
+// }
+// double Astarpath::getHeu(MappingNodePtr node1, MappingNodePtr node2) {
+//   // 使用欧几里得距离计算启发函数
+//   double dx = fabs(node1->coord(0) - node2->coord(0));
+//   double dy = fabs(node1->coord(1) - node2->coord(1));
+//   double dz = fabs(node1->coord(2) - node2->coord(2));
+//   double heu = sqrt(dx * dx + dy * dy + dz * dz);
+
+//   // Tie breaker，减少路径寻找的分支情况
+//   double tie_breaker = 1.0 + 1.0 / 10000.0;
+//   return heu * tie_breaker;
+// }
 double Astarpath::getHeu(MappingNodePtr node1, MappingNodePtr node2) {
-  // 使用数字距离和一种类型的tie_breaker
-
   double heu;
-  double tie_breaker;
+  double tie_breaker = 0;
+  double dx, dy, dz;
 
+  dx = abs(node1->coord.x() - node2->coord.x());
+  dy = abs(node1->coord.y() - node2->coord.y());
+  dz = abs(node1->coord.z() - node2->coord.z());
 
-  
+  heu = max(dx, dy);
+  heu = max(heu, dz);
+
+  // tie_breaker = sqrt(pow(dx,2) + pow(dy,2) + pow(dz,2));
+  // heu = heu + tie_breaker * 0.1;
+
   return heu;
-
-  
 }
+
 
 
 bool Astarpath::AstarSearch(Vector3d start_pt, Vector3d end_pt) {
@@ -252,10 +281,19 @@ bool Astarpath::AstarSearch(Vector3d start_pt, Vector3d end_pt) {
   while (!Openset.empty()) {
     //1.弹出g+h最小的节点
     //????
+    currentPtr = Openset.begin()->second;
+    Openset.erase(Openset.begin());
+    currentPtr->id = -1;
     //2.判断是否是终点
     //????
+    if (currentPtr->coord == endPtr->coord) {
+      ROS_INFO("Reached Goal!");
+      terminatePtr = currentPtr;
+      return true;
+    }
     //3.拓展当前节点
     //????
+    AstarGetSucc(currentPtr, neighborPtrSets, edgeCostSets);
     //4.填写信息，完成更新
     for(unsigned int i=0;i<neighborPtrSets.size();i++)
     {
@@ -267,10 +305,16 @@ bool Astarpath::AstarSearch(Vector3d start_pt, Vector3d end_pt) {
       tentative_g_score=currentPtr->g_score+edgeCostSets[i];
       neighborPtr=neighborPtrSets[i];
       if(isOccupied(neighborPtr->index))
-      continue;
+        continue;
       if(neighborPtr->id==0)
       {
         //???
+        neighborPtr->g_score = currentPtr->g_score+edgeCostSets[i];
+        neighborPtr->f_score = neighborPtr->g_score + getHeu(neighborPtr, endPtr);
+        neighborPtr->Father = currentPtr;
+        neighborPtr->id = 1; // 加入 open list
+        Openset.insert(make_pair(neighborPtr->f_score, neighborPtr));
+
         continue;
       }
       else if(neighborPtr->id==1)
@@ -285,6 +329,8 @@ bool Astarpath::AstarSearch(Vector3d start_pt, Vector3d end_pt) {
       }
     }
   }
+  
+
 
   ros::Time time_2 = ros::Time::now();
   if ((time_2 - time_1).toSec() > 0.1)
@@ -308,9 +354,17 @@ terminatePtr=terminatePtr->Father;
    * STEP 1.3:  追溯找到的路径
    *
    * **/
-
+  while (!front_path.empty()) {
+  auto path_nodePtr = front_path.back();
+  printf("%lf, %lf, %lf", path_nodePtr->coord.x(), path_nodePtr->coord.y(), path_nodePtr->coord.z());
+  front_path.pop_back();
+  Vector3d path_pos = path_nodePtr->coord;
+  path.push_back(path_pos);
+}
   return path;
 }
+
+
 
 
 std::vector<Vector3d> Astarpath::pathSimplify(const vector<Vector3d> &path,
